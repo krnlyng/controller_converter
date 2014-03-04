@@ -2,13 +2,12 @@ obj
 
 var
     long cog
-    long n64_stack[32]
 
 pub start(N64_out_pin, do_button_update_ptr)
     setup(N64_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
     if cog
         cogstop(cog~ -1)
-    cog := cognew(@n64_console, @n64_stack[0]) + 1
+    cog := cognew(@n64_console, 0) + 1
 
 pub setup(N64_out_pin, do_button_update_ptr, theupdatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
     n64_outpin := N64_out_pin
@@ -23,7 +22,6 @@ pub setup(N64_out_pin, do_button_update_ptr, theupdatetime_ptr, controller_data_
     uS4_8 := uS1 / 2
     uS10 := 10 * uS1
     mS1 := (clkfreq / 1_000)
-    half_second_8 := clkfreq / 16
 
 dat
             org 0
@@ -43,17 +41,6 @@ n64_console
             mov frqa, #1
             mov frqb, #1
 
-{{
-            or dira, testpin_mask
-            mov time, cnt
-            add time, uS10
-            waitcnt time, uS10
-
-            andn dira, testpin_mask
-            mov time, cnt
-            add time, uS10
-            waitcnt time, uS10
-}}
 loop
             ' read command byte from the console
             mov reps, #8 ' receive 1 byte
@@ -227,9 +214,8 @@ receive_generic
 first_bit_generic
             mov phsa, #0                            ' ready high count for timeouts
             mov phsb, #0                            ' ready low count
-            'waitpne pinmask, pinmask                ' wait for low
 
-            'mov timeout, half_second_8
+            ' wait for low
             mov timeout, uS4_8
             call #wait_for_low_timeout
             'if timeout return
@@ -239,8 +225,8 @@ first_bit_generic
             waitpeq pinmask, pinmask                ' wait for high
             mov lowtime, phsb                       ' capture low count
             mov phsb, #0                            ' reset low count
-            'waitpne pinmask, pinmask                ' wait for low
 
+            ' wait for low
             mov timeout, uS4_8
             call #wait_for_low_timeout
             'if timeout return
@@ -255,8 +241,7 @@ receive_remaining_bits
             waitpeq pinmask, pinmask                ' wait for high
             mov lowtime, phsb                       ' capture low count
             mov phsb, #0                            ' reset low count
-            'waitpne pinmask, pinmask                ' wait for low
-
+            ' wait for low
             mov timeout, uS4_8
             call #wait_for_low_timeout
             'if timeout return
@@ -380,7 +365,6 @@ n64_data_ptr        long 0
 updatetime_ptr      long    0
 do_update_ptr       long    0
 
-half_second_8       long    0
 timeout             long    0
 
 consoleinfo_ptr     long    0

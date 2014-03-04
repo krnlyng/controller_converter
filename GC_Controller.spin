@@ -2,18 +2,17 @@ obj
 
 var
     long cog
-    long gc_cog_stack[32]
 
 pub start(GC_in_pin, do_button_update_ptr)
     setup(GC_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
     if cog
         cogstop(cog~ - 1)
-    cog := cognew(@gc_start, @gc_cog_stack[0]) + 1
+    cog := cognew(@gc_start, 0) + 1
 
 pub init(thecogid, GC_in_pin, do_button_update_ptr)
     setup(GC_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
     cog := thecogid
-    coginit(thecogid, @gc_start, @gc_cog_stack[0])
+    coginit(thecogid, @gc_start, 0)
 
 pub setup(GC_in_pin, do_button_update_ptr, the_updatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
     gc_inpin := GC_in_pin
@@ -30,8 +29,6 @@ pub setup(GC_in_pin, do_button_update_ptr, the_updatetime_ptr, controller_data_p
     uS20 := 20 * uS1
 
     mS1 := (clkfreq / 1_000)
-
-    half_second_8 := clkfreq / 16
 
 dat
             org 0
@@ -139,18 +136,25 @@ wait_for_low_timeout_ret   ret
 
 receive_generic
 first_bit_generic
+            mov phsa, #0                            ' ready high count for timeouts
             mov phsb, #0                            ' ready low count
-            'waitpne pinmask, pinmask                ' wait for low
-            mov timeout, half_second_8
+
+            ' wait for low
+            mov timeout, uS4_8
             call #wait_for_low_timeout
+            'if timeout return
+    if_nz   jmp #receive_generic_ret    
 
             mov phsa, #0                            ' ready high count
             waitpeq pinmask, pinmask                ' wait for high
             mov lowtime, phsb                       ' capture low count
             mov phsb, #0                            ' reset low count
-            'waitpne pinmask, pinmask                ' wait for low
+
+            ' wait for low
             mov timeout, uS4_8
             call #wait_for_low_timeout
+            'if timeout return
+    if_nz   jmp #receive_generic_ret
 
             sub reps, #1
 receive_remaining_bits
@@ -161,9 +165,12 @@ receive_remaining_bits
             waitpeq pinmask, pinmask                ' wait for high
             mov lowtime, phsb                       ' capture low count
             mov phsb, #0                            ' reset low count
-            'waitpne pinmask, pinmask                ' wait for low
+            ' wait for low
             mov timeout, uS4_8
             call #wait_for_low_timeout
+            'if timeout return
+    if_nz   jmp #receive_generic_ret
+
             djnz reps, #receive_remaining_bits      ' repeat for remaining command bits
 
             cmp lowtime, phsa wc                    ' compare lowtime to hightime for last bit
@@ -335,7 +342,6 @@ tmp                 long    0
 
 update_time_diff    long    0
 update_time_diff_tmp    long    0
-half_second_8         long    0
 
 compare                 long    0
 
