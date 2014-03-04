@@ -4,14 +4,14 @@ var
     long cog
     long gc_cog_stack[32]
 
-pub start(GC_in_pin, do_button_update_ptr, the_updatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
-    setup(GC_in_pin, do_button_update_ptr, the_updatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
+pub start(GC_in_pin, do_button_update_ptr)
+    setup(GC_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
     if cog
         cogstop(cog~ - 1)
     cog := cognew(@gc_start, @gc_cog_stack[0]) + 1
 
-pub init(thecogid, GC_in_pin, do_button_update_ptr, the_updatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
-    setup(GC_in_pin, do_button_update_ptr, the_updatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
+pub init(thecogid, GC_in_pin, do_button_update_ptr)
+    setup(GC_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
     cog := thecogid
     coginit(thecogid, @gc_start, @gc_cog_stack[0])
 

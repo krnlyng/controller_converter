@@ -4,8 +4,8 @@ var
     long cog
     long n64_stack[32]
 
-pub start(N64_out_pin, do_button_update_ptr, theupdatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
-    setup(N64_out_pin, do_button_update_ptr, theupdatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
+pub start(N64_out_pin, do_button_update_ptr)
+    setup(N64_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
     if cog
         cogstop(cog~ -1)
     cog := cognew(@n64_console, @n64_stack[0]) + 1
