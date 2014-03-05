@@ -34,12 +34,12 @@ VAR
     long p4_consoleinfo
 
 PUB start
-    CO1.start(0, @p1_do_update)
-    CO2.start(1, @p2_do_update)
-    CO3.start(2, @p3_do_update)
-    CO4.start(3, @p4_do_update)
-    P1.start(4, @p1_do_update)
-    P2.start(5, @p2_do_update)
-    P3.start(6, @p3_do_update)
-    P4.init(0, 7, @p4_do_update)
+    CO1.start_controller(0, @p1_do_update)
+    CO2.start_controller(1, @p2_do_update)
+    CO3.start_controller(2, @p3_do_update)
+    CO4.start_controller(3, @p4_do_update)
+    P1.start_console(4, @p1_do_update)
+    P2.start_console(5, @p2_do_update)
+    P3.start_console(6, @p3_do_update)
+    P4.init_console(0, 7, @p4_do_update)
 

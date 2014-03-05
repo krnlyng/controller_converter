@@ -3,17 +3,40 @@ obj
 var
     long cog
 
-pub start(N64_out_pin, do_button_update_ptr)
+' simulate a n64 console (for interfacing with a controller)
+pub start_console(N64_out_pin, do_button_update_ptr)
     setup(N64_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
     if cog
         cogstop(cog~ -1)
-    cog := cognew(@n64_console, 0) + 1
+    be_controller := 0
+    cog := cognew(@n64, 0) + 1
 
-pub setup(N64_out_pin, do_button_update_ptr, theupdatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
-    n64_outpin := N64_out_pin
+pub init_console(thecogid, N64_out_pin, do_button_update_ptr)
+    setup(N64_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    cog := thecogid
+    be_controller := 0
+    coginit(thecogid, @n64, 0)
+
+' simulate a n64 controller (for interfacing with a console)
+pub start_controller(N64_in_pin, do_button_update_ptr)
+    setup(N64_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    if cog
+        cogstop(cog~ -1)
+    be_controller := 1
+    cog := cognew(@n64, 0) + 1
+
+pub init_controller(thecogid, N64_in_pin, do_button_update_ptr)
+    setup(N64_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    cog := thecogid
+    be_controller := 1
+    coginit(thecogid, @n64, 0)
+
+pub setup(N64_inout_pin, do_button_update_ptr, theupdatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
+    n64_pin := N64_inout_pin
     updatetime_ptr := theupdatetime_ptr
     do_update_ptr := do_button_update_ptr
-    n64_data_ptr := controller_data_ptr
+    data1_ptr := controller_data_ptr
+    data2_ptr := controller_data_ptr+4
     consoleinfo_ptr := theconsoleinfo_ptr
 
     uS1 := clkfreq / 1_000_000
@@ -25,23 +48,45 @@ pub setup(N64_out_pin, do_button_update_ptr, theupdatetime_ptr, controller_data_
 
 dat
             org 0
+n64
+            cmp be_controller, C1 wz
+    if_z    jmp #n64_controller
+
+' interface with an n64 controller (simulate a console)
 n64_console
+            call #init
+n64_console_loop
+            ' wait for request
+            rdlong tmp, do_update_ptr
+            cmp tmp, C1         wz
+    if_nz   jmp #n64_console_loop
+
+            mov update_time_diff_tmp, cnt
+
+            mov reps, #8
+            mov n64_command_answer, n64_cmd_state
+            shl n64_command_answer, #24
+            call #transmit_n64
+            call #transmit_stop_bit_n64
+
+            call #receive_state_from_n64
+
+            call #publish_button_data
+
+            mov update_time_diff, cnt
+            sub update_time_diff, update_time_diff_tmp
+            wrlong update_time_diff, updatetime_ptr
+
+            ' done
+            wrlong C0, do_update_ptr
+
+            jmp #n64_console_loop
+
+' interface with an n64 console (simulate a controller)
+n64_controller
             wrlong C0, consoleinfo_ptr
-
-            mov n64_pinmask, #1
-            shl n64_pinmask, n64_outpin
-
-            ' initialize counter to listen for commands from N64
-            movs ctra, n64_outpin
-            movs ctrb, n64_outpin
-
-            movi ctra, #%01000_000 ' counter for high time
-            movi ctrb, #%01100_000 ' counter for low time
-
-            mov frqa, #1
-            mov frqb, #1
-
-loop
+            call #init
+n64_controller_loop
             ' read command byte from the console
             mov reps, #8 ' receive 1 byte
             mov n64_command, #0
@@ -50,7 +95,7 @@ loop
 
             ' check if we need to request an update
             cmp update_requested, C1 wz
-    if_z    jmp #loop
+    if_z    jmp #n64_controller_loop
 
             mov tmp, last_state
             add tmp, timediff
@@ -60,11 +105,11 @@ loop
 
             ' check if it's time for an update
             cmp tmp, cnt wc
-    if_nc   jmp #loop ' not yet if tmp >= cnt
+    if_nc   jmp #n64_controller_loop ' not yet if tmp >= cnt
 
             wrlong C1, do_update_ptr
             mov update_requested, C1
-            jmp #loop
+            jmp #n64_controller_loop
 
             ' check which command we received
 check_command
@@ -80,7 +125,7 @@ check_command
     if_z    jmp #n64_reset
 
             ' unknown command, start from begining
-            jmp #loop
+            jmp #n64_controller_loop
 
 n64_identify
             call #wait_for_n64_stop_bit
@@ -93,7 +138,7 @@ n64_identify
             call #transmit_n64
             call #transmit_stop_bit_n64
 
-            jmp #loop
+            jmp #n64_controller_loop
 
 n64_state
             call #wait_for_n64_stop_bit
@@ -122,7 +167,7 @@ after_diff
             mov last_state, tmp
 
             ' read button data
-            rdlong n64_state_answer, n64_data_ptr
+            rdlong n64_state_answer, data1_ptr
 
             ' send button information
             mov reps, #32 ' 4 Byte
@@ -130,10 +175,10 @@ after_diff
             call #transmit_n64
             call #transmit_stop_bit_n64
 
-            jmp #loop
+            jmp #n64_controller_loop
 
 n64_0x02
-            jmp #loop
+            jmp #n64_controller_loop
             ' 0x02 command
 
             mov reps, #16 ' receive address and crc
@@ -154,10 +199,10 @@ send_remaining_0x02_bytes_n64
             call #transmit_n64
             call #n64_address_crc
             
-            jmp #loop
+            jmp #n64_controller_loop
 
 n64_0x03
-            jmp #loop
+            jmp #n64_controller_loop
             ' 0x03 command
 
             mov reps, #16 ' receive address and crc
@@ -178,11 +223,26 @@ recv_remaining_0x03_bytes_n64
             call #transmit_n64
             call #n64_address_crc
 
-            jmp #loop
+            jmp #n64_controller_loop
 
 n64_reset
             ' n64 expects same answer as identify answer
             jmp #n64_identify
+
+init
+            mov n64_pinmask, #1
+            shl n64_pinmask, n64_pin
+
+            ' initialize counter to listen for commands from N64
+            movs ctra, n64_pin
+            movs ctrb, n64_pin
+
+            movi ctra, #%01000_000 ' counter for high time
+            movi ctrb, #%01100_000 ' counter for low time
+
+            mov frqa, #1
+            mov frqb, #1
+init_ret    ret
 
 transmit_n64
             mov time, cnt
@@ -199,9 +259,11 @@ transmit_n64_loop
 transmit_n64_ret        ret
 
 transmit_stop_bit_n64
+            mov time, cnt
+            add time, uS1
             ' stop bit
             or dira, n64_pinmask    ' pull line low
-            waitcnt time, uS2       ' wait 2 uS
+            waitcnt time, #0        ' wait 1 uS
             andn dira, n64_pinmask  ' release line
 transmit_stop_bit_n64_ret ret
 
@@ -253,6 +315,12 @@ receive_remaining_bits
             rcl recv_data, #1                       ' store last bit into recv_data
 receive_generic_ret ret
 
+receive_state_from_n64
+            mov reps, #32
+            call #receive_from_n64
+            mov n64_state_answer, n64_command
+receive_state_from_n64_ret  ret
+
 receive_from_n64
             mov pinmask, n64_pinmask
             mov recv_data, #0
@@ -285,6 +353,78 @@ n64_address_crc_loop
             tjnz crc_bit_mask, #n64_address_crc_loop
 n64_address_crc_ret ret
 
+publish_button_data
+            rdlong tmp, consoleinfo_ptr
+            cmp tmp, C0 wz
+    if_z    call #publish_n64
+            cmp tmp, C1 wz
+    if_z    call #publish_gc
+publish_button_data_ret     ret
+
+publish_n64
+            wrlong n64_state_answer, data1_ptr
+publish_n64_ret  ret
+
+publish_gc
+            mov gc_data1, #0
+            mov gc_data2, #0
+            call #convert_n64_data_to_gc_data
+            wrlong gc_data1, data1_ptr
+            wrlong gc_data2, data2_ptr
+publish_gc_ret   ret
+
+convert_n64_data_to_gc_data
+            test n64_state_answer, n64_a_mask wz
+    if_z    or gc_data1, gc_a_mask wr
+
+            test n64_state_answer, n64_b_mask wz
+    if_z    or gc_data1, gc_b_mask wr
+
+            ' z -> l
+            test n64_state_answer, n64_z_mask wz
+    if_z    or gc_data1, gc_l_mask wr
+
+            test n64_state_answer, n64_start_mask wz
+    if_z    or gc_data1, gc_start_mask wr
+
+            test n64_state_answer, n64_dright_mask wz
+    if_z    or gc_data1, gc_dright_mask wr
+
+            test n64_state_answer, n64_dleft_mask wz
+    if_z    or gc_data1, gc_dleft_mask wr
+
+            test n64_state_answer, n64_dup_mask wz
+    if_z    or gc_data1, gc_dup_mask wr
+
+            test n64_state_answer, n64_ddown_mask wz
+    if_z    or gc_data1, gc_ddown_mask wr
+
+            ' l -> l
+            test n64_state_answer, n64_l_mask wz
+    if_z    or gc_data1, gc_l_mask wr
+
+            test n64_state_answer, n64_r_mask wz
+    if_z    or gc_data1, gc_r_mask wr
+
+            ' cup -> ?
+'            test n64_state_answer, n64_cup_mask wz
+'    if_z    or gc_data1, gc_
+
+            test n64_state_answer, n64_cdown_mask wz
+    if_z    or gc_data1, gc_z_mask wr
+
+            test n64_state_answer, n64_cleft_mask wz
+    if_z    or gc_data1, gc_y_mask wr
+
+            test n64_state_answer, n64_cright_mask wz
+    if_z    or gc_data1, gc_x_mask wr
+
+            ' TODO axes
+convert_n64_data_to_gc_data_ret ret
+
+gc_data1            long 0
+gc_data2            long 0
+
 address_and_crc     long 0
 crc_result          long 0
 crc_bit_mask        long 0
@@ -294,7 +434,7 @@ address_crc_poly    long $00_00_00_15
 pinmask             long 0
 recv_data           long 0
 
-n64_outpin          long 0
+n64_pin          long 0
 n64_pinmask         long 0
 
 uS1                 long 0
@@ -329,6 +469,12 @@ n64_b_mask          long (1 << 30)
 n64_z_mask          long (1 << 29)
 n64_start_mask      long (1 << 28)
 n64_dpad_mask       long $0F_00_00_00
+
+n64_dright_mask     long (1 << 24)
+n64_dleft_mask      long (1 << 25)
+n64_dup_mask        long (1 << 26)
+n64_ddown_mask      long (1 << 27)
+
                     ' joy reset bit
                     '0
 n64_l_mask          long (1 << 21)
@@ -346,6 +492,38 @@ n64_cdown_mask      long $00_04_00_00
 n64_cleft_mask      long $00_02_00_00
 n64_cright_mask     long $00_01_00_00
 
+' gc_data1 description:
+                    '0
+                    '0
+                    '0
+gc_start_mask       long (1 << 28)
+gc_y_mask           long (1 << 27)
+gc_x_mask           long (1 << 26)
+gc_b_mask           long (1 << 25)
+gc_a_mask           long (1 << 24)
+                    '1
+gc_l_mask           long (1 << 22)
+gc_r_mask           long (1 << 21)
+gc_z_mask           long (1 << 20)
+gc_dpad_mask        long $00_0F_00_00
+
+gc_dleft_mask       long (1 << 16)
+gc_dright_mask      long (1 << 17)
+gc_dup_mask         long (1 << 18)
+gc_ddown_mask       long (1 << 19)
+
+gc_joy_x_axis       long $00_00_FF_00
+gc_joy_y_axis       long $00_00_00_FF
+
+'gc_data2 description:
+
+gc_cjoy_x_axis      long $FF_00_00_00
+gc_cjoy_y_axis      long $00_FF_00_00
+gc_left_sbutton     long $00_00_FF_00     ' left shoulder button press level
+gc_right_sbutton    long $00_00_00_FF     ' same for the right button
+
+'end
+
 axis_tmp            byte 0
 axis_tmp1           byte 0
 tmp                 long 0
@@ -360,7 +538,8 @@ long_sign           long %1000_0000_0000_0000_0000_0000_0000_0000
 C0                  long 0
 C1                  long 1
 
-n64_data_ptr        long 0
+data1_ptr           long    0
+data2_ptr           long    0
 
 updatetime_ptr      long    0
 do_update_ptr       long    0
@@ -369,3 +548,7 @@ timeout             long    0
 
 consoleinfo_ptr     long    0
 
+update_time_diff    long    0
+update_time_diff_tmp    long    0
+
+be_controller       long 0

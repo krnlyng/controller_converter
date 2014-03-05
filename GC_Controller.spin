@@ -3,22 +3,42 @@ obj
 var
     long cog
 
-pub start(GC_in_pin, do_button_update_ptr)
+' simulate a gc console (for interfacing with a controller)
+pub start_console(GC_out_pin, do_button_update_ptr)
+    setup(GC_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    if cog
+        cogstop(cog~ - 1)
+    be_controller := 0
+    cog := cognew(@gc, 0) + 1
+
+pub init_console(thecogid, GC_out_pin, do_button_update_ptr)
+    setup(GC_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    cog := thecogid
+    be_controller := 0
+    coginit(thecogid, @gc, 0)
+
+{{
+' simulate a gc controller (for interfacing with a console)
+pub start_controller(GC_in_pin, do_button_update_ptr)
     setup(GC_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
     if cog
         cogstop(cog~ - 1)
-    cog := cognew(@gc_start, 0) + 1
+    be_controller := 1
+    cog := cognew(@gc, 0) + 1
 
-pub init(thecogid, GC_in_pin, do_button_update_ptr)
+pub init_controller(thecogid, GC_in_pin, do_button_update_ptr)
     setup(GC_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
     cog := thecogid
-    coginit(thecogid, @gc_start, 0)
+    be_controller := 1
+    coginit(thecogid, @gc, 0)
+}}
 
-pub setup(GC_in_pin, do_button_update_ptr, the_updatetime_ptr, controller_data_ptr, theconsoleinfo_ptr)
-    gc_inpin := GC_in_pin
+pub setup(GC_inout_pin, do_button_update_ptr, the_updatetime_ptr, controller_data1_ptr, theconsoleinfo_ptr)
+    gc_pin := GC_inout_pin
     updatetime_ptr := the_updatetime_ptr
     do_update_ptr := do_button_update_ptr
-    data_ptr := controller_data_ptr
+    data1_ptr := controller_data1_ptr
+    data2_ptr := controller_data1_ptr+4
     consoleinfo_ptr := theconsoleinfo_ptr
 
     uS1 := clkfreq / 1_000_000
@@ -32,24 +52,18 @@ pub setup(GC_in_pin, do_button_update_ptr, the_updatetime_ptr, controller_data_p
 
 dat
             org 0
-gc_start
-            ' initialize pin masks
-            mov gc_pinmask, #1
-            shl gc_pinmask, gc_inpin
+gc
+{{
+            cmp be_controller, C1 wz
+    if_z    jmp #gc_controller
+}}
 
-            ' initialize counters
-            movi ctra, #%01000_000 ' counter for high time
-            movi ctrb, #%01100_000 ' counter for low time
-
-            movs ctra, gc_inpin
-            movs ctrb, gc_inpin
-
-            mov frqa, #1
-            mov frqb, #1
+' interface with a gc controller (simulate a console)
+gc_console
+            call #init
 
             mov reps1, #5 ' try 5 times
-
-init_loop
+gc_console_init_loop
             mov reps, #8
             mov gc_command, #0
             call #transmit_gc
@@ -57,18 +71,18 @@ init_loop
 
             mov reps, #24
             call #receive_from_gc
-    if_z    jmp #gc_loop ' if no timeout leave
-            djnz reps1, #init_loop
+    if_z    jmp #gc_console_loop ' if no timeout leave
+            djnz reps1, #gc_console_init_loop
 
 ' TODO (failed)
-            jmp #gc_loop
+            jmp #gc_console_loop
 
 
-gc_loop
+gc_console_loop
             ' wait for request
             rdlong tmp, do_update_ptr
             cmp tmp, C1                 wz
-    if_nz   jmp #gc_loop
+    if_nz   jmp #gc_console_loop
 
             mov update_time_diff_tmp, cnt
 
@@ -85,9 +99,33 @@ gc_loop
             sub update_time_diff, update_time_diff_tmp
             wrlong update_time_diff, updatetime_ptr
 
+            ' done
             wrlong C0, do_update_ptr
 
-            jmp #gc_loop
+            jmp #gc_console_loop
+
+{{
+' interface with a gc console (simulate a controller)
+gc_controller
+            call #init
+            jmp #gc_controller
+}}
+
+init
+            ' initialize pin masks
+            mov gc_pinmask, #1
+            shl gc_pinmask, gc_pin
+
+            ' initialize counters
+            movi ctra, #%01000_000 ' counter for high time
+            movi ctrb, #%01100_000 ' counter for low time
+
+            movs ctra, gc_pin
+            movs ctrb, gc_pin
+
+            mov frqa, #1
+            mov frqb, #1
+init_ret    ret
 
 transmit_gc
             mov time, cnt
@@ -105,10 +143,10 @@ transmit_gc_ret        ret
 
 transmit_stop_bit_gc
             mov time, cnt
-            add time, uS2
+            add time, uS1
             ' stop bit
             or dira, gc_pinmask    ' pull line low
-            waitcnt time, #0      ' wait 2 uS
+            waitcnt time, #0       ' wait 1 uS
             andn dira, gc_pinmask  ' release line
 transmit_stop_bit_gc_ret ret
 
@@ -180,14 +218,21 @@ receive_generic_ret ret
 publish_button_data
             rdlong tmp, consoleinfo_ptr
             cmp tmp, C0 wz
-    if_z    call #convert_to_n64
+    if_z    call #publish_n64
+            cmp tmp, C1 wz
+    if_z    call #publish_gc
 publish_button_data_ret     ret
 
-convert_to_n64
+publish_n64
             mov n64_state_answer, #0
             call #convert_gc_data_to_n64_data
-            wrlong n64_state_answer, data_ptr
-convert_to_n64_ret ret
+            wrlong n64_state_answer, data1_ptr
+publish_n64_ret ret
+
+publish_gc
+            wrlong gc_data1, data1_ptr
+            wrlong gc_data2, data2_ptr
+publish_gc_ret   ret
 
 convert_gc_data_to_n64_data
             test gc_data1, gc_start_mask wz
@@ -313,7 +358,7 @@ gc_data             long 0
 
 timeout          long 0
 
-gc_inpin        long    0
+gc_pin        long    0
 
 gc_pinmask      long    0
 
@@ -353,7 +398,8 @@ request_difference      long    0
 
 sync_count              long    0        ' frame to wait for console request
 
-data_ptr                long    0
+data1_ptr               long    0
+data2_ptr               long    0
 
 mS1                     long    0
 
@@ -429,4 +475,6 @@ n64_state_answer        long 0
 
 
 consoleinfo_ptr         long 0
+
+be_controller        long 0
 
