@@ -3,10 +3,10 @@ CON
     _clkmode = xtal1 + pll16x
 
 OBJ
-    CO1         : "N64_Console"
-    CO2         : "N64_Console"
-    CO3         : "N64_Console"
-    CO4         : "N64_Console"
+    CO1         : "N64"
+    CO2         : "N64"
+    CO3         : "N64"
+    CO4         : "N64"
     P1          : "GC_Controller"
     P2          : "GC_Controller"
     P3          : "GC_Controller"
