@@ -150,11 +150,11 @@ n64_state
             cmp tmp, C0 wz
     if_nz   add subtract, uS1 ' controller module was to slow
 
+            ' calculate time between now and the last update
             mov tmp, cnt
-            cmp last_state, tmp wc
-    if_nc   jmp #after_diff ' don't calculate diff if last_state >= cnt
             mov timediff_tmp, tmp
             sub timediff_tmp, last_state
+            abs timediff_tmp, timediff_tmp
 
             ' only save minimal timediff
             cmp timediff_tmp, timediff wc
