@@ -5,28 +5,28 @@ var
 
 ' simulate a n64 console (for interfacing with a controller)
 pub start_console(N64_out_pin, do_button_update_ptr)
-    setup(N64_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    setup(N64_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+16)
     if cog
         cogstop(cog~ -1)
     be_controller := 0
     cog := cognew(@n64, 0) + 1
 
 pub init_console(thecogid, N64_out_pin, do_button_update_ptr)
-    setup(N64_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    setup(N64_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+16)
     cog := thecogid
     be_controller := 0
     coginit(thecogid, @n64, 0)
 
 ' simulate a n64 controller (for interfacing with a console)
 pub start_controller(N64_in_pin, do_button_update_ptr)
-    setup(N64_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    setup(N64_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+16)
     if cog
         cogstop(cog~ -1)
     be_controller := 1
     cog := cognew(@n64, 0) + 1
 
 pub init_controller(thecogid, N64_in_pin, do_button_update_ptr)
-    setup(N64_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    setup(N64_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+16)
     cog := thecogid
     be_controller := 1
     coginit(thecogid, @n64, 0)

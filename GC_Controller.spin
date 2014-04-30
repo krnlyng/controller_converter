@@ -5,14 +5,14 @@ var
 
 ' simulate a gc console (for interfacing with a controller)
 pub start_console(GC_out_pin, do_button_update_ptr)
-    setup(GC_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    setup(GC_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+16)
     if cog
         cogstop(cog~ - 1)
     be_controller := 0
     cog := cognew(@gc, 0) + 1
 
 pub init_console(thecogid, GC_out_pin, do_button_update_ptr)
-    setup(GC_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    setup(GC_out_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+16)
     cog := thecogid
     be_controller := 0
     coginit(thecogid, @gc, 0)
@@ -20,14 +20,14 @@ pub init_console(thecogid, GC_out_pin, do_button_update_ptr)
 {{
 ' simulate a gc controller (for interfacing with a console)
 pub start_controller(GC_in_pin, do_button_update_ptr)
-    setup(GC_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    setup(GC_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+16)
     if cog
         cogstop(cog~ - 1)
     be_controller := 1
     cog := cognew(@gc, 0) + 1
 
 pub init_controller(thecogid, GC_in_pin, do_button_update_ptr)
-    setup(GC_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+12)
+    setup(GC_in_pin, do_button_update_ptr, do_button_update_ptr+4, do_button_update_ptr+8, do_button_update_ptr+16)
     cog := thecogid
     be_controller := 1
     coginit(thecogid, @gc, 0)
